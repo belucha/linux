@@ -1,0 +1,34 @@
+* New Haven kt5x06 touchscreen controller
+
+Required properties:
+- compatible: must be "newhaven,kt5306"
+- reg: I2C address of the chip
+
+Either one of these properties is required:
+- interrupts: interrupt to which the chip is connected (also specify interrupt-parent)
+- touch-gpio: a phandle to the touch event GPIO
+
+Optional:
+- pinctrl-0: a phancle to a pinmux object
+
+Example:
+
+	i2c@00000000 {
+		/* configure GPIO1_14 as input and use this pin as interrupt source.
+		   Also */
+		touchscreen@38 {
+			compatible = "newhaven,kt5306";
+			reg = <0x38>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&nh_ft5x06_pins>;
+			touch-gpio = <&gpio1 14 0>;
+		};
+
+		/* use gpio1 irq 14 as interrupt source for touch events, 
+		   the gpio must be already configured */
+		touchscreen@38 {
+			compatible = "newhaven,kt5306";
+			reg = <0x38>;
+			interrupt-parent = <&gpio1>;
+			interrupts = <14 0>;
+		};

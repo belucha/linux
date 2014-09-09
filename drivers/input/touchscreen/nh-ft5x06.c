@@ -1,6 +1,7 @@
 /*
  * NEWHAVEN FT5X06 Touchscreen Controller Driver
- *
+ * 		NHD-5.0-800480TF-ATXL#-CTP-ND
+ *		http://www.newhavendisplay.com/specs/NHD-5.0-800480TF-ATXL-CTP.pdf
  * Copyright (C) 2014 Intronik GmbH
  *	Daniel Gross <dgross@intronik.de>
  *
@@ -34,16 +35,15 @@
 
 #define MIN_X		0x00
 #define MIN_Y		0x00
-#define MAX_X		0x31f	/* (800 - 1) */
-#define MAX_Y		0x1df	/* (480 - 1) */
-#define MAX_AREA	0xff
+#define MAX_X		(800-1)		// TODO: make that a platform/device tree parameter
+#define MAX_Y		(480-1)		// TODO: make that a platform/device tree parameter
 #define MAX_FINGERS	5
 
 struct nh_ft5x06_ts_finger {
 	u16 x;
 	u16 y;
-	u8 t;
-	bool is_valid;
+	u8 id;
+	u8 ev;
 };
 
 struct nh_ft5x06_ts_data {
@@ -61,16 +61,18 @@ static int nh_ft5x06_ts_read_data(struct nh_ft5x06_ts_data *ts)
 	struct i2c_msg msg[2];
 	int error;
 	u8 start_reg;
-	u8 buf[10];
+	u8 buf[6*MAX_FINGERS];
+	u8* prawfinger;
+	int i;
 
 	/* read touchscreen data from FT5x06 */
 	msg[0].addr = client->addr;
 	msg[0].flags = 0;
 	msg[0].len = 1;
 	msg[0].buf = &start_reg;
-	start_reg = 0x10;
+	start_reg = 0x03;
 
-	msg[1].addr = ts->client->addr;
+	msg[1].addr = client->addr;
 	msg[1].flags = I2C_M_RD;
 	msg[1].len = sizeof(buf);
 	msg[1].buf = buf;
@@ -79,22 +81,58 @@ static int nh_ft5x06_ts_read_data(struct nh_ft5x06_ts_data *ts)
 	if (error < 0)
 		return error;
 
-	/* get "valid" bits */
-	finger[0].is_valid = buf[2] >> 7;
-	finger[1].is_valid = buf[5] >> 7;
-
-	/* get xy coordinate */
-	if (finger[0].is_valid) {
-		finger[0].x = ((buf[2] & 0x0070) << 4) | buf[3];
-		finger[0].y = ((buf[2] & 0x0007) << 8) | buf[4];
-		finger[0].t = buf[8];
+	prawfinger = buf;
+	for (i=0; i<MAX_FINGERS; i++)
+	{
+		finger->x = ((prawfinger[0]&0xF)<<8)|(prawfinger[1]);
+		finger->y = ((prawfinger[2]&0xF)<<8)|(prawfinger[3]);
+		finger->id = prawfinger[0]>>6;	// 2 bit event flag
+		finger->ev = prawfinger[2]>>4;	// 4bit touch id
+		finger++;
+		prawfinger+=6;					// advance to next finger in raw data
 	}
+	return 0;
+}
 
-	if (finger[1].is_valid) {
-		finger[1].x = ((buf[5] & 0x0070) << 4) | buf[6];
-		finger[1].y = ((buf[5] & 0x0007) << 8) | buf[7];
-		finger[1].t = buf[9];
+static int nh_ft5x06_ts_check(struct i2c_client *client, const u8* buffer, int offset, u8 expected, const char* registerName)
+{
+	if (buffer[offset]!=expected) {
+		dev_err(&client->dev, "register: \"%s\" got 0x%.2X expected 0x%.2X", registerName, buffer[offset], expected);
+		return -1;
 	}
+	return 0;
+}
+
+static int nh_ft5x06_ts_identify(struct i2c_client *client)
+{
+	struct i2c_msg msg[2];
+	int error;
+	u8 start_reg;
+	u8 buf[10];
+
+	/* read touchscreen data from FT5x06 */
+	msg[0].addr = client->addr;
+	msg[0].flags = 0;
+	msg[0].len = 1;
+	msg[0].buf = &start_reg;
+	start_reg = 0xA1;
+
+	msg[1].addr = client->addr;
+	msg[1].flags = I2C_M_RD;
+	msg[1].len = sizeof(buf);
+	msg[1].buf = buf;
+
+	error = i2c_transfer(client->adapter, msg, 2);
+	if (error < 0)
+		return error;
+
+	// check, various firmware bytes
+	if (
+		(nh_ft5x06_ts_check(client, buf, 0xA1-start_reg, 0x30, "ID_G_LIB_VERSION_H")!=0)||
+		(nh_ft5x06_ts_check(client, buf, 0xA2-start_reg, 0x01, "ID_G_LIB_VERSION_L")!=0)||
+		(nh_ft5x06_ts_check(client, buf, 0xA3-start_reg, 0x55, "ID_G_CIPHER")!=0)||
+		(nh_ft5x06_ts_check(client, buf, 0xA6-start_reg, 0x05, "ID_G_FIRMID")!=0))
+			return -1;
 
 	return 0;
 }
@@ -111,17 +149,19 @@ static irqreturn_t nh_ft5x06_ts_irq_handler(int irq, void *dev_id)
 	if (ret < 0)
 		goto end;
 
-	/* multi touch protocol */
-	for (i = 0; i < MAX_FINGERS; i++) {
-		if (!finger[i].is_valid)
-			continue;
-
-		input_report_abs(input_dev, ABS_MT_TOUCH_MAJOR, finger[i].t);
-		input_report_abs(input_dev, ABS_MT_POSITION_X, finger[i].x);
-		input_report_abs(input_dev, ABS_MT_POSITION_Y, finger[i].y);
-		input_mt_sync(input_dev);
-		count++;
-	}
+	/* multi touch protocol type B (using tracking id's) 
+		see /Documentation/input/multi-touch-protocol.txt
+	*/
+	for (i = 0; i < MAX_FINGERS; i++) 
+		// only report contact events, since touch down events are sometimes buggy
+		if (finger[i].ev==0x02)
+		{
+			input_report_abs(input_dev, ABS_MT_TRACKING_ID, finger[i].id);
+			input_report_abs(input_dev, ABS_MT_POSITION_X, finger[i].x);
+			input_report_abs(input_dev, ABS_MT_POSITION_Y, finger[i].y);
+			input_mt_sync(input_dev);										//  SYN_MT_REPORT
+			count++;
+		}
 
 	/* SYN_MT_REPORT only if no contact */
 	if (!count) {
@@ -138,7 +178,6 @@ static irqreturn_t nh_ft5x06_ts_irq_handler(int irq, void *dev_id)
 
 	/* SYN_REPORT */
 	input_sync(input_dev);
-
 end:
 	return IRQ_HANDLED;
 }
@@ -160,6 +199,9 @@ static int nh_ft5x06_ts_probe(struct i2c_client *client,
 		dev_err(&client->dev, "no IRQ?\n");
 		return -EINVAL;
 	}
+
+	if (nh_ft5x06_ts_identify(client))
+		return -ENODEV;
 
 	ts = devm_kzalloc(&client->dev, sizeof(*ts), GFP_KERNEL);
 	if (!ts)
@@ -211,7 +253,7 @@ static int nh_ft5x06_ts_probe(struct i2c_client *client,
 	__set_bit(EV_KEY, input_dev->evbit);
 	__set_bit(EV_ABS, input_dev->evbit);
 
-	input_set_abs_params(input_dev, ABS_MT_TOUCH_MAJOR, 0, MAX_AREA, 0, 0);
+	input_set_abs_params(input_dev, ABS_MT_TRACKING_ID, 0, MAX_FINGERS, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_POSITION_X, MIN_X, MAX_X, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_POSITION_Y, MIN_Y, MAX_Y, 0, 0);
 
