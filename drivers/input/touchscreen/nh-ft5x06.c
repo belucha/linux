@@ -223,7 +223,7 @@ static int nh_ft5x06_ts_probe(struct i2c_client *client,
 				client->irq, ts->touch_gpio);
 				return error;
 		}
-		error = devm_gpio_request_one(&client->dev, ts->touch_gpio, GPIOF_IN, "nh-ft5x06-touch");
+		error = devm_gpio_request_one(&client->dev, ts->touch_gpio, GPIOF_IN|GPIOF_EXPORT, "nh-ft5x06-touch");
 		if (error) {
 			dev_err(&client->dev,
 				"Unable to request GPIO pin %d.\n",
