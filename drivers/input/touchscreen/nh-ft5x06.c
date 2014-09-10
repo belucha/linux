@@ -37,7 +37,7 @@
 #define MIN_Y		0x00
 #define MAX_X		(800-1)		// TODO: make that a platform/device tree parameter
 #define MAX_Y		(480-1)		// TODO: make that a platform/device tree parameter
-#define MAX_FINGERS	5
+#define MAX_FINGERS	1
 
 struct nh_ft5x06_ts_finger {
 	u16 x;
@@ -86,8 +86,8 @@ static int nh_ft5x06_ts_read_data(struct nh_ft5x06_ts_data *ts)
 	{
 		finger->x = ((prawfinger[0]&0xF)<<8)|(prawfinger[1]);
 		finger->y = ((prawfinger[2]&0xF)<<8)|(prawfinger[3]);
-		finger->id = prawfinger[0]>>6;	// 2 bit event flag
-		finger->ev = prawfinger[2]>>4;	// 4bit touch id
+		finger->ev = prawfinger[0]>>6;	// 2 bit event flag
+		finger->id = prawfinger[2]>>4;	// 4bit touch id
 		finger++;
 		prawfinger+=6;					// advance to next finger in raw data
 	}
@@ -149,32 +149,33 @@ static irqreturn_t nh_ft5x06_ts_irq_handler(int irq, void *dev_id)
 	if (ret < 0)
 		goto end;
 
-	/* multi touch protocol type B (using tracking id's) 
+	/* multi touch protocol A
 		see /Documentation/input/multi-touch-protocol.txt
 	*/
-	for (i = 0; i < MAX_FINGERS; i++) 
+	for (i = 0; i < MAX_FINGERS; i++) {
 		// only report contact events, since touch down events are sometimes buggy
 		if (finger[i].ev==0x02)
 		{
-			input_report_abs(input_dev, ABS_MT_TRACKING_ID, finger[i].id);
-			input_report_abs(input_dev, ABS_MT_POSITION_X, finger[i].x);
-			input_report_abs(input_dev, ABS_MT_POSITION_Y, finger[i].y);
-			input_mt_sync(input_dev);										//  SYN_MT_REPORT
+			input_report_abs(input_dev, ABS_X, finger[i].x);
+			input_report_abs(input_dev, ABS_Y, finger[i].y);
+//			input_mt_sync(input_dev);	//  SYN_MT_REPORT
 			count++;
-		}
+		} 
+	}
+	input_report_key(input_dev, BTN_TOUCH, count>0);
 
 	/* SYN_MT_REPORT only if no contact */
-	if (!count) {
-		input_mt_sync(input_dev);
-		if (ts->low_latency_req.dev) {
-			dev_pm_qos_remove_request(&ts->low_latency_req);
-			ts->low_latency_req.dev = NULL;
-		}
-	} else if (!ts->low_latency_req.dev) {
-		/* First contact, request 100 us latency. */
-		dev_pm_qos_add_ancestor_request(&ts->client->dev,
-						&ts->low_latency_req, 100);
-	}
+//	if (!count) {
+//		input_mt_sync(input_dev);
+//		if (ts->low_latency_req.dev) {
+//			dev_pm_qos_remove_request(&ts->low_latency_req);
+//			ts->low_latency_req.dev = NULL;
+//		}
+//	} else if (!ts->low_latency_req.dev) {
+//		/* First contact, request 100 us latency. */
+//		dev_pm_qos_add_ancestor_request(&ts->client->dev,
+//						&ts->low_latency_req, 100);
+//	}
 
 	/* SYN_REPORT */
 	input_sync(input_dev);
@@ -252,10 +253,13 @@ static int nh_ft5x06_ts_probe(struct i2c_client *client,
 	__set_bit(EV_SYN, input_dev->evbit);
 	__set_bit(EV_KEY, input_dev->evbit);
 	__set_bit(EV_ABS, input_dev->evbit);
+	__set_bit(BTN_TOUCH, input_dev->keybit);
 
-	input_set_abs_params(input_dev, ABS_MT_TRACKING_ID, 0, MAX_FINGERS, 0, 0);
-	input_set_abs_params(input_dev, ABS_MT_POSITION_X, MIN_X, MAX_X, 0, 0);
-	input_set_abs_params(input_dev, ABS_MT_POSITION_Y, MIN_Y, MAX_Y, 0, 0);
+//	input_set_abs_params(input_dev, ABS_MT_TRACKING_ID, 0, MAX_FINGERS, 0, 0);
+	input_set_abs_params(input_dev, ABS_X, MIN_X, MAX_X, 0, 0);
+	input_set_abs_params(input_dev, ABS_Y, MIN_Y, MAX_Y, 0, 0);
+//	input_set_abs_params(input_dev, ABS_MT_POSITION_X, MIN_X, MAX_X, 0, 0);
+//	input_set_abs_params(input_dev, ABS_MT_POSITION_Y, MIN_Y, MAX_Y, 0, 0);
 
 	error = devm_request_threaded_irq(&client->dev, client->irq,
 					  NULL, nh_ft5x06_ts_irq_handler,
