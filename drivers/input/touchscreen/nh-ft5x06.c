@@ -195,11 +195,6 @@ static int nh_ft5x06_ts_probe(struct i2c_client *client,
 		return -EIO;
 	}
 
-	if (!client->irq) {
-		dev_err(&client->dev, "no IRQ?\n");
-		return -EINVAL;
-	}
-
 	if (nh_ft5x06_ts_identify(client))
 		return -ENODEV;
 
@@ -243,6 +238,11 @@ static int nh_ft5x06_ts_probe(struct i2c_client *client,
 				ts->touch_gpio, error);
 			return error;
 		}
+	}
+
+	if (!client->irq) {
+		dev_err(&client->dev, "no IRQ?\n");
+		return -EINVAL;
 	}
 
 	input_dev->name = "nh-ft5x06-touchscreen";
