@@ -28,6 +28,7 @@
 #define PCA953X_OUTPUT		1
 #define PCA953X_INVERT		2
 #define PCA953X_DIRECTION	3
+#define PCA6416_INT_MASK	0x25		// value is multiplied by 2 and thus is realy 0x4A
 
 #define REG_ADDR_AI		0x80
 
@@ -42,10 +43,12 @@
 
 #define PCA_GPIO_MASK		0x00FF
 #define PCA_INT			0x0100
+#define PCA_INT_ENR		0x0200		// this type has an interrupt enable register
 #define PCA953X_TYPE		0x1000
 #define PCA957X_TYPE		0x2000
 
 static const struct i2c_device_id pca953x_id[] = {
+	{ "pca6416", 16 | PCA953X_TYPE | PCA_INT | PCA_INT_ENR, },
 	{ "pca9505", 40 | PCA953X_TYPE | PCA_INT, },
 	{ "pca9534", 8  | PCA953X_TYPE | PCA_INT, },
 	{ "pca9535", 16 | PCA953X_TYPE | PCA_INT, },
@@ -218,6 +221,7 @@ static int pca953x_gpio_direction_input(struct gpio_chip *gc, unsigned off)
 		break;
 	}
 	ret = pca953x_write_single(chip, offset, reg_val, off);
+
 	if (ret)
 		goto exit;
 
@@ -561,6 +565,13 @@ static int pca953x_irq_setup(struct pca953x_chip *chip,
 		if (ret)
 			return ret;
 
+		/* some chips require an interrupt enable register */
+		if (id->driver_data & PCA_INT_ENR)
+		{
+			const u32 enableAll = 0x00000000;
+			pca953x_write_regs(chip, PCA6416_INT_MASK, (u8*) &enableAll);
+		}
+
 		/*
 		 * There is no way to know which GPIO line generated the
 		 * interrupt.  We have to rely on the previous read for
@@ -799,6 +810,7 @@ static int pca953x_remove(struct i2c_client *client)
 }
 
 static const struct of_device_id pca953x_dt_ids[] = {
+	{ .compatible = "nxp,pca6416", },
 	{ .compatible = "nxp,pca9505", },
 	{ .compatible = "nxp,pca9534", },
 	{ .compatible = "nxp,pca9535", },
