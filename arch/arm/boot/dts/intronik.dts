@@ -1,0 +1,293 @@
+/*
+ * Copyright (C) 2014 Intronik GmbH
+ *
+ * Hardware specification for Intronik CANcom module.
+ *
+ */
+/dts-v1/;
+
+#include "am33xx.dtsi"
+#include "am335x-bone-common.dtsi"
+#include "am335x-bone-common-pinmux.dtsi"
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/input/input.h>
+
+&ldo3_reg {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+	regulator-always-on;
+};
+
+&am33xx_pinmux {
+	pinctrl-names = "default";
+	pinctrl-0 = <&clkout2_pin>;
+	
+	dcan0_pins: dcan0_pins_s0 {
+		pinctrl-single,pins = <
+			0x178 0x12  /* d_can0_tx, SLEWCTRL_FAST | INPUT_PULLUP | MODE2 */
+			0x17C 0x32  /* d_can0_rx, SLEWCTRL_FAST | RECV_ENABLE | INPUT_PULLUP | MODE2 */
+		>;
+	};
+
+	dcan1_pins: dcan1_pins_s0 {
+		pinctrl-single,pins = <
+			0x180 0x12  /* d_can1_tx, SLEWCTRL_FAST | INPUT_PULLUP | MODE2 */
+			0x184 0x32  /* d_can1_rx, SLEWCTRL_FAST | RECV_ENABLE | INPUT_PULLUP | MODE2 */
+		>;
+	};
+
+	lcd_backlight_pins: lcd_backlight_pins_s0 {
+		pinctrl-single,pins = <
+			0x024 (PIN_OUTPUT | MUX_MODE7) /* P8.13 GPIO0[23] */
+		>;
+	};
+	
+	lcd_enable_pins: lcd_enable_pins_s0 {
+		pinctrl-single,pins = <
+			0x028 (PIN_OUTPUT | MUX_MODE7) /* P8.14 - GPIO0[26] */
+		>;
+	};
+	
+	edt_ft5x06_pins: edt_ft5x06_pins_s0 {
+		pinctrl-single,pins = <
+			0x038 (PIN_INPUT_PULLUP | MUX_MODE7 )  /* P8.16 - GPIO1[14] */
+		>;
+	};
+
+	beeper_pins: beeper_pins_s0 {
+		pinctrl-signgle,pins = <
+			0x030 (PIN_OUTPUT | MUX_MODE7) /* P8.12 - GPIO1[12] */
+		>;
+	};
+
+	/* interruptquelle fuer gpio-expander */
+	gpioextender_irq_pin: gpioextender_irq_pin_s0 {
+		pinctrl-single,pins = <
+			0x02C (PIN_INPUT | MUX_MODE7 )  /* P8.17 - GPIO0[27] */
+		>;
+	};
+};
+
+/* sd-card */
+&mmc1 {
+	vmmc-supply = <&vmmcsd_fixed>;
+};
+
+/* emmc */
+&mmc2 {
+	vmmc-supply = <&vmmcsd_fixed>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&emmc_pins>;
+	bus-width = <8>;
+	status = "okay";
+};
+
+/* uart1: P9.24, P9.26 */
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart1_pins>;
+//	status = "okay";
+};
+
+/* uart2: P9.21, P9.22 */
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart2_pins>;
+//	status = "okay";
+};
+
+/* uart4: P9.11, P9.13 */
+&uart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart4_pins>;
+//	status = "okay";
+};
+
+/* can0 */
+&dcan0 {
+	 #address-cells = <1>;
+	 #size-cells = <0>;
+	 status = "okay";
+	 pinctrl-names = "default";
+	 pinctrl-0 = <&dcan0_pins>;
+};
+
+/* can1 */
+&dcan1 {
+	 #address-cells = <1>;
+	 #size-cells = <0>;
+	 status = "okay";
+	 pinctrl-names = "default";
+	 pinctrl-0 = <&dcan1_pins>;
+};
+
+&lcdc {
+	status = "okay";
+};
+
+
+
+/ {
+	my_gpio {
+		compatible = "gpio-of-helper";
+		status = "okay";
+
+		expander_input {
+			gpio-name = "ioexpander-event";
+			gpio = <&gpio0 27 GPIO_ACTIVE_LOW>;
+			input;
+		};
+
+		touch_interrupt {
+			gpio-name = "touch-event";
+			gpio = <&gpio1 14 GPIO_ACTIVE_LOW>;
+			input;
+		};
+
+		lcd_enable {
+			gpio-name = "lcd-enable";
+			gpio = <&gpio0 26 GPIO_ACTIVE_HIGH>;
+			output;
+			init-high;
+		};
+	};
+};
+
+&i2c1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1_pins>;
+	status = "okay";
+	clock-frequency = <400000>;
+	
+	eeprom0: eeprom0@50 {
+		compatible = "at,24c256";
+		reg = <0x50>;
+	};
+	
+	gpioextender: gpio@20 {
+		compatible = "nxp,pca6416";
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpioextender_irq_pin>;
+		reg = <0x20>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-parent = <&gpio0>;
+		interrupts = <27 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+	};
+
+	touchft5306: nh-ft5306@38 {
+		compatible = "newhaven,ft5306";
+		reg = <0x38>;
+		//touch-gpio = <&gpio1 14 GPIO_ACTIVE_LOW>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <14 IRQ_TYPE_EDGE_FALLING>;
+	};	
+
+};
+
+&i2c2 {
+	status = "disable";
+};
+
+/ {
+	cpus {
+		cpu@0 {
+			cpu0-supply = <&dcdc2_reg>;
+			/*
+			 * To consider voltage drop between PMIC and SoC,
+			 * tolerance value is reduced to 2% from 4% and
+			 * voltage value is increased as a precaution.
+			 */
+			operating-points = <
+				/* kHz    uV */
+				1000000	1325000
+				800000	1300000
+				600000	1112000
+				300000	969000
+			>;
+		};
+	};
+
+	panel {
+		status = "okay";
+		compatible = "ti,tilcdc,panel";
+		pinctrl-names = "default";
+		pinctrl-0 = <&bbcape_lcd_pins &lcd_enable_pins>;
+		panel-info {
+			ac-bias           = <255>;
+			ac-bias-intrpt    = <0>;
+			dma-burst-sz      = <16>;
+			bpp               = <16>;
+			fdd               = <0x80>;
+			sync-edge         = <1>;
+			sync-ctrl         = <1>;
+			raster-order      = <0>;
+			fifo-th           = <8>;
+		};
+		display-timings {
+			native-mode = <&NHD50timing>;
+			/* Settings for NEWHAVEN NHD5.0-800480TF-ATXI#-CTP */
+			NHD50timing: 800x480 {
+				clock-frequency = <30000000>;
+				hactive = <800>;
+				vactive = <480>;
+				hfront-porch = <40>;
+				hback-porch = <40>;
+				hsync-len = <48>;
+				vback-porch = <30>;
+				vfront-porch = <13>;
+				vsync-len = <3>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+		};
+	};
+
+	beeper: beeper {
+		status = "okay";
+		compatible = "gpio-beeper";
+		gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&beeper_pins>;
+	};
+	
+	backlight: backlight {
+		status = "okay";
+		compatible = "gpio-backlight";
+		pintctrl-names = "default";
+		pinctrl-0 = <&lcd_backlight_pins>;
+		gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
+		default-on;
+	};
+
+	extios {
+		status = "okay";
+		compatible = "gpio-leds";
+		extio@0 {
+			label = "extio1";
+			gpios = <&gpioextender 0 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+			default-state = "off";
+		};
+	};
+
+	gpio_key_init {
+		compatible = "gpio-keys";
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&gpioextender_irq_pin>;
+		#adress-cells = <1>;
+		#size-cells = <0>;
+		buttonQ@1 {
+			debounce_interval = <50>;
+			linux,code = <KEY_Q>;
+			label = "Q";
+			gpios = <&gpioextender 9 GPIO_ACTIVE_HIGH>;
+			gpio-key,wakeup;
+			autorepeat;
+		};
+	};
+};

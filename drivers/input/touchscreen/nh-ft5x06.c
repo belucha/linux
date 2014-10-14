@@ -39,60 +39,12 @@
 #define MAX_Y		(480-1)		// TODO: make that a platform/device tree parameter
 #define MAX_FINGERS	1
 
-struct nh_ft5x06_ts_finger {
-	u16 x;
-	u16 y;
-	u8 id;
-	u8 ev;
-};
-
 struct nh_ft5x06_ts_data {
 	struct i2c_client *client;
 	struct input_dev *input_dev;
-	struct nh_ft5x06_ts_finger finger[MAX_FINGERS];
 	struct dev_pm_qos_request low_latency_req;
 	int touch_gpio;
 };
-
-static int nh_ft5x06_ts_read_data(struct nh_ft5x06_ts_data *ts)
-{
-	struct nh_ft5x06_ts_finger *finger = ts->finger;
-	struct i2c_client *client = ts->client;
-	struct i2c_msg msg[2];
-	int error;
-	u8 start_reg;
-	u8 buf[6*MAX_FINGERS];
-	u8* prawfinger;
-	int i;
-
-	/* read touchscreen data from FT5x06 */
-	msg[0].addr = client->addr;
-	msg[0].flags = 0;
-	msg[0].len = 1;
-	msg[0].buf = &start_reg;
-	start_reg = 0x03;
-
-	msg[1].addr = client->addr;
-	msg[1].flags = I2C_M_RD;
-	msg[1].len = sizeof(buf);
-	msg[1].buf = buf;
-
-	error = i2c_transfer(client->adapter, msg, 2);
-	if (error < 0)
-		return error;
-
-	prawfinger = buf;
-	for (i=0; i<MAX_FINGERS; i++)
-	{
-		finger->x = ((prawfinger[0]&0xF)<<8)|(prawfinger[1]);
-		finger->y = ((prawfinger[2]&0xF)<<8)|(prawfinger[3]);
-		finger->ev = prawfinger[0]>>6;	// 2 bit event flag
-		finger->id = prawfinger[2]>>4;	// 4bit touch id
-		finger++;
-		prawfinger+=6;					// advance to next finger in raw data
-	}
-	return 0;
-}
 
 static int nh_ft5x06_ts_check(struct i2c_client *client, const u8* buffer, int offset, u8 expected, const char* registerName)
 {
@@ -140,27 +92,57 @@ static int nh_ft5x06_ts_identify(struct i2c_client *client)
 static irqreturn_t nh_ft5x06_ts_irq_handler(int irq, void *dev_id)
 {
 	struct nh_ft5x06_ts_data *ts = dev_id;
-	struct nh_ft5x06_ts_finger *finger = ts->finger;
 	struct input_dev *input_dev = ts->input_dev;
+	struct i2c_client *client = ts->client;
+	struct i2c_msg msg[2];
+	u8 start_reg;
+	u8 buf[6*MAX_FINGERS+1];
+	u8* prawfinger;
+	int error;
 	int count = 0;
-	int i, ret;
+	unsigned i;
+	unsigned c;
 
-	ret = nh_ft5x06_ts_read_data(ts);
-	if (ret < 0)
+	/* read touchscreen data from FT5x06 */
+	msg[0].addr = client->addr;
+	msg[0].flags = 0;
+	msg[0].len = 1;
+	msg[0].buf = &start_reg;
+	start_reg = 0x02;
+
+	msg[1].addr = client->addr;
+	msg[1].flags = I2C_M_RD;
+	msg[1].len = sizeof(buf);
+	msg[1].buf = buf;
+
+	error = i2c_transfer(client->adapter, msg, 2);
+	if (error < 0)
 		goto end;
+
+	
+	c = buf[0];			// get number of fingers
+	if (c>MAX_FINGERS)		// limit that value
+		c=MAX_FINGERS;		
+	prawfinger = &buf[1];		// set start pointer of buffer to first finger struct
 
 	/* multi touch protocol A
 		see /Documentation/input/multi-touch-protocol.txt
 	*/
-	for (i = 0; i < MAX_FINGERS; i++) {
+	for (i=0; i<buf[0]; i++)
+	{
+		u16 x = ((prawfinger[0]&0xF)<<8)|(prawfinger[1]);
+		u16 y = ((prawfinger[2]&0xF)<<8)|(prawfinger[3]);
+		u8 ev = prawfinger[0]>>6;	// 2 bit event flag
+		//u8 id = prawfinger[2]>>4;	// 4bit touch id
+		prawfinger+=6;			// advance to next finger in raw data
 		// only report contact events, since touch down events are sometimes buggy
-		if (finger[i].ev==0x02)
+		if (ev==0x02)
 		{
-			input_report_abs(input_dev, ABS_X, finger[i].x);
-			input_report_abs(input_dev, ABS_Y, finger[i].y);
+			input_report_abs(input_dev, ABS_X, x);
+			input_report_abs(input_dev, ABS_Y, y);
 //			input_mt_sync(input_dev);	//  SYN_MT_REPORT
 			count++;
-		} 
+		}
 	}
 	input_report_key(input_dev, BTN_TOUCH, count>0);
 
