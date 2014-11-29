@@ -291,7 +291,7 @@
 
 	ecap0_pins_sleep: ecap0_pins_sleep {
 		pinctrl-single,pins = <
-			0x164  (PULL_DISABLE | MUX_MODE7)	/* eCAP0_in_PWM0_out.eCAP0_in_PWM0_out */
+			0x164  (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* eCAP0_in_PWM0_out.eCAP0_in_PWM0_out */
 		>;
 	};
 
@@ -369,7 +369,6 @@
 			0x100 (PIN_INPUT_PULLDOWN | MUX_MODE7)
 			0x104 (PIN_INPUT_PULLDOWN | MUX_MODE7)
 			0x1A0 (PIN_INPUT_PULLDOWN | MUX_MODE7)
-			0x160 (PIN_INPUT_PULLDOWN | MUX_MODE7)
 		>;
 	};
 
@@ -485,6 +484,22 @@
 			0x110 (PIN_INPUT_PULLDOWN | MUX_MODE4) /* mii1_txd3.mcasp1_fsx */
 			0x108 (PIN_OUTPUT_PULLDOWN | MUX_MODE4) /* mii1_col.mcasp1_axr2 */
 			0x144 (PIN_INPUT_PULLDOWN | MUX_MODE4) /* rmii1_ref_clk.mcasp1_axr3 */
+		>;
+	};
+
+	am335x_evm_audio_pins_sleep: am335x_evm_audio_pins_sleep {
+		pinctrl-single,pins = <
+			0x10c (PIN_INPUT_PULLDOWN | MUX_MODE7) /* mii1_rx_dv.mcasp1_aclkx */
+			0x110 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* mii1_txd3.mcasp1_fsx */
+			0x108 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* mii1_col.mcasp1_axr2 */
+			0x144 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* rmii1_ref_clk.mcasp1_axr3 */
+		>;
+	};
+
+	dcan1_pins_default: dcan1_pins_default {
+		pinctrl-single,pins = <
+			0x168 (PIN_OUTPUT | MUX_MODE2) /* uart0_ctsn.d_can1_tx */
+			0x16c (PIN_INPUT_PULLDOWN | MUX_MODE2) /* uart0_rtsn.d_can1_rx */
 		>;
 	};
 };
@@ -713,19 +728,20 @@
 #include "tps65910.dtsi"
 
 &mcasp1 {
-		pinctrl-names = "default";
-		pinctrl-0 = <&am335x_evm_audio_pins>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&am335x_evm_audio_pins>;
+	pinctrl-1 = <&am335x_evm_audio_pins_sleep>;
 
-		status = "okay";
+	status = "okay";
 
-		op-mode = <0>;          /* MCASP_IIS_MODE */
-		tdm-slots = <2>;
-		/* 4 serializers */
-		serial-dir = <  /* 0: INACTIVE, 1: TX, 2: RX */
-			0 0 1 2
-		>;
-		tx-num-evt = <32>;
-		rx-num-evt = <32>;
+	op-mode = <0>;          /* MCASP_IIS_MODE */
+	tdm-slots = <2>;
+	/* 4 serializers */
+	serial-dir = <  /* 0: INACTIVE, 1: TX, 2: RX */
+		0 0 1 2
+	>;
+	tx-num-evt = <32>;
+	rx-num-evt = <32>;
 };
 
 &tps {
@@ -849,6 +865,7 @@
 	pinctrl-0 = <&mmc1_pins_default>;
 	pinctrl-1 = <&mmc1_pins_sleep>;
 	cd-gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>;
+	wp-gpios = <&gpio3 18 GPIO_ACTIVE_HIGH>;
 };
 
 &mmc3 {
@@ -894,4 +911,10 @@
 
 &wkup_m3 {
 	ti,scale-data-fw = "am335x-evm-scale-data.bin";
+};
+
+&dcan1 {
+	status = "disabled";	/* Enable only if Profile 1 is selected */
+	pinctrl-names = "default";
+	pinctrl-0 = <&dcan1_pins_default>;
 };

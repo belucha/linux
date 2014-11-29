@@ -46,17 +46,6 @@
 		compatible = "osddisplays,osd057T0559-34ts", "panel-dpi";
 		label = "lcd";
 
-		pinctrl-names = "default";
-		pinctrl-0 = <&lcd_pins>;
-
-		/*
-		 * SelLCDorHDMI, LOW to select HDMI. This is not really the
-		 * panel's enable GPIO, but we don't have HDMI driver support nor
-		 * support to switch between two displays, so using this gpio as
-		 * panel's enable should be safe.
-		 */
-		enable-gpios = <&gpio2 1 GPIO_ACTIVE_HIGH>;
-
 		panel-timing {
 			clock-frequency = <33000000>;
 			hactive = <800>;
@@ -104,7 +93,7 @@
 
 	am43xx_pinmux: pinmux@44e10800 {
 		pinctrl-names = "default";
-		pinctrl-0 = <&debugss_pins>;
+		pinctrl-0 = <&debugss_pins &lcd_pins>;
 
 		cpsw_default: cpsw_default {
 			pinctrl-single,pins = <
@@ -551,7 +540,7 @@
 				0x03030069>;	/* LEFT */
 		};
 
-	backlight {
+	lcd_bl: backlight {
 		compatible = "pwm-backlight";
 		pwms = <&ecap0 0 50000 PWM_POLARITY_INVERTED>;
 		brightness-levels = <0 51 53 56 62 75 101 152 255>;
@@ -685,8 +674,8 @@
 		dcdc3: regulator-dcdc3 {
 			compatible = "ti,tps65218-dcdc3";
 			regulator-name = "vdcdc3";
-			regulator-min-microvolt = <1350000>;
-			regulator-max-microvolt = <1350000>;
+			regulator-min-microvolt = <1500000>;
+			regulator-max-microvolt = <1500000>;
 			regulator-boot-on;
 			regulator-always-on;
 		};
@@ -814,6 +803,14 @@
 	status = "okay";
 };
 
+&tscadc {
+        status = "okay";
+
+        adc {
+                ti,adc-channels = <0 1 2 3 4 5 6 7>;
+        };
+};
+
 &ecap0 {
 		status = "okay";
 		pinctrl-names = "default";
@@ -837,7 +834,7 @@
 };
 
 &gpmc {
-	status = "okay";
+	status = "okay";	/* Disable QSPI when enabling GPMC (NAND) */
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&nand_flash_x8_default>;
 	pinctrl-1 = <&nand_flash_x8_sleep>;
@@ -943,7 +940,7 @@
 };
 
 &qspi {
-	status = "okay";
+	status = "disabled";	/* Disable GPMC (NAND) when enabling QSPI */
 	pinctrl-names = "default";
 	pinctrl-0 = <&qspi1_default>;
 

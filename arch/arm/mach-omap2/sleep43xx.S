@@ -218,6 +218,15 @@ sync:
 	bne	sync
 #endif
 
+	ldr	r1, am43xx_virt_mpu_clkctrl
+	ldr	r2, [r1]
+
+	ldr	r1, am43xx_virt_mpu_clkstctrl
+	ldr	r2, [r1]
+
+	ldr	r1, am43xx_virt_emif_clkctrl
+	ldr	r2, [r1]
+
 	ldr	r0, emif_addr_virt
 	/* Put SDRAM in self-refresh */
 	ldr	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
@@ -225,8 +234,10 @@ sync:
 	orr	r1, r1, #EMIF_POWER_MGMT_SELF_REFRESH_MODE
 	str	r1, [r0, #EMIF_POWER_MANAGEMENT_CONTROL]
 
-	ldr	r1, dram_sync_word	@ a dummy access to DDR as per spec
+	ldr	r1, dram_sync_word	@ access DRAM
 	ldr	r2, [r1, #0]
+	str	r2, [r1, #0]
+	isb
 
 	mov	r1, #EMIF_POWER_MGMT_DELAY_PERIOD	@ Wait for system
 wait_self_refresh:					@ to enter SR
@@ -290,6 +301,11 @@ am43xx_deep_sleep_suspend:
 	ldr	r1, am43xx_virt_mpu_clkstctrl
 	mov	r2, #AM43XX_CM_CLKSTCTRL_CLKTRCTRL_SW_SLEEP
 	str	r2, [r1]
+bus_sync:
+	ldr	r1, ddr_start		@ access SRAM
+	str	r1, ddr_start
+
+	isb
 
 	/*
 	 * Execute a barrier instruction to ensure that all cache,
@@ -298,6 +314,7 @@ am43xx_deep_sleep_suspend:
 	 */
 	dsb
 	dmb
+	isb
 
 	/*
 	 * Execute a WFI instruction and wait until the
@@ -382,7 +399,7 @@ ENTRY(am43xx_resume_offset)
 
 ENTRY(am43xx_resume_from_deep_sleep)
 	/* Set MPU CLKSTCTRL to HW AUTO so that CPUidle works properly */
-	ldr	r1, am43xx_virt_mpu_clkstctrl
+	ldr	r1, am43xx_phys_mpu_clkstctrl
 	mov	r2, #AM43XX_CM_CLKSTCTRL_CLKTRCTRL_HW_AUTO
 	str	r2, [r1]
 
@@ -569,6 +586,9 @@ am43xx_virt_mpu_pwrstctrl:
 	.word	(AM43XX_PM_MPU_PWRSTCTRL)
 am43xx_virt_mpu_clkstctrl:
 	.word	(AM43XX_CM_MPU_CLKSTCTRL)
+am43xx_phys_mpu_clkstctrl:
+	.word	(AM43XX_CM_BASE + AM43XX_CM_MPU_INST + \
+		 AM43XX_CM_MPU_MPU_CDOFFS)
 am43xx_virt_mpu_clkctrl:
 	.word	(AM43XX_CM_MPU_MPU_CLKCTRL)
 am43xx_virt_emif_clkctrl:

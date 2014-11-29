@@ -424,7 +424,6 @@
 			0x100 (PIN_INPUT_PULLDOWN | MUX_MODE7)
 			0x104 (PIN_INPUT_PULLDOWN | MUX_MODE7)
 			0x1A0 (PIN_INPUT_PULLDOWN | MUX_MODE7)
-			0x160 (PIN_INPUT_PULLDOWN | MUX_MODE7)
 		>;
 	};
 
@@ -434,6 +433,15 @@
 			0x110 (PIN_INPUT_PULLDOWN | MUX_MODE4) /* mii1_rxerr.mcasp1_fsx */
 			0x108 (PIN_OUTPUT_PULLDOWN | MUX_MODE4) /* mii1_col.mcasp1_axr2 */
 			0x144 (PIN_INPUT_PULLDOWN | MUX_MODE4) /* rmii1_ref_clk.mcasp1_axr3 */
+		>;
+	};
+
+	mcasp1_pins_sleep: mcasp1_pins_sleep {
+		pinctrl-single,pins = <
+			0x10c (PIN_INPUT_PULLDOWN | MUX_MODE7)
+			0x110 (PIN_INPUT_PULLDOWN | MUX_MODE7)
+			0x108 (PIN_INPUT_PULLDOWN | MUX_MODE7)
+			0x144 (PIN_INPUT_PULLDOWN | MUX_MODE7)
 		>;
 	};
 
@@ -528,6 +536,18 @@
 
 	usb@47401000 {
 		status = "okay";
+	};
+
+	dma-controller@47402000  {
+		status = "okay";
+	};
+
+	usb-phy@47401b00 {
+		status = "okay";
+	};
+	usb@47401800 {
+		status = "okay";
+		dr_mode = "host";
 	};
 };
 
@@ -685,19 +705,20 @@
 };
 
 &mcasp1 {
-		pinctrl-names = "default";
-		pinctrl-0 = <&mcasp1_pins>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&mcasp1_pins>;
+	pinctrl-1 = <&mcasp1_pins_sleep>;
 
-		status = "okay";
+	status = "okay";
 
-		op-mode = <0>;          /* MCASP_IIS_MODE */
-		tdm-slots = <2>;
-		/* 4 serializers */
-		serial-dir = <  /* 0: INACTIVE, 1: TX, 2: RX */
-			0 0 1 2
-		>;
-		tx-num-evt = <32>;
-		rx-num-evt = <32>;
+	op-mode = <0>;	/* MCASP_IIS_MODE */
+	tdm-slots = <2>;
+	/* 4 serializers */
+	serial-dir = <	/* 0: INACTIVE, 1: TX, 2: RX */
+		0 0 1 2
+	>;
+	tx-num-evt = <32>;
+	rx-num-evt = <32>;
 };
 
 &tscadc {

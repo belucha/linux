@@ -11,10 +11,26 @@
 #include "am335x-bone-common.dtsi"
 #include "am335x-bone-common-pinmux.dtsi"
 
+/ {
+	model = "TI AM335x BeagleBone Black";
+	compatible = "ti,am335x-bone-black", "ti,am335x-bone", "ti,am33xx";
+};
+
 &ldo3_reg {
 	regulator-min-microvolt = <1800000>;
 	regulator-max-microvolt = <1800000>;
 	regulator-always-on;
+};
+
+&ocp {
+	/* clkout2 */
+	P9_41_pinmux {
+		status = "disabled";
+	};
+	/* mmc1 */
+	P9_92_pinmux {
+		status = "disabled";
+	};
 };
 
 &mmc1 {
@@ -27,6 +43,14 @@
 };
 
 #include "am335x-boneblack-emmc.dtsi"
+/* HDMI: with audio */
+#include "am335x-boneblack-nxp-hdmi-audio.dtsi"
+/* HDMI: without audio */
+/* #include "am335x-boneblack-nxp-hdmi-no-audio.dtsi" */
+
+/* can1: P9_24, P9_26 */
+#include "am335x-can1.dtsi"
+/* #include "am335x-bone-can1.dtsi" */
 
 /* spi0: */
 /* P9.17 spi0_cs0 */
@@ -50,17 +74,17 @@
 /* #include "am335x-bone-spi1a-spidev.dtsi" */
 
 /* uart1: P9.24, P9.26 */
+#include "am335x-ttyO1.dtsi"
 /* #include "am335x-bone-ttyO1.dtsi" */
 /* uart2: P9.21, P9.22 */
+#include "am335x-ttyO2.dtsi"
 /* #include "am335x-bone-ttyO2.dtsi" */
 /* uart4: P9.11, P9.13 */
+#include "am335x-ttyO4.dtsi"
 /* #include "am335x-bone-ttyO4.dtsi" */
-/* uart5: P8.37, P8.38 am335x-boneblack: hdmi has to be disabled for ttyO5 */
+/* uart5: P8.37, P8.38 boneblack: hdmi has to be disabled for ttyO5 */
+#include "am335x-ttyO5.dtsi"
 /* #include "am335x-bone-ttyO5.dtsi" */
-
-/* Display */
-#include "am335x-boneblack-nxp-hdmi-audio.dtsi"
-/* #include "am335x-boneblack-nxp-hdmi-no-audio.dtsi" */
 
 /* Capes */
 /* http://elinux.org/4D_4.3_LCD_CAPE */
@@ -75,9 +99,12 @@
 /* 4DCAPE-70T (Resistive Touch version): */
 /* #include "am335x-bone-4dcape-70t.dtsi" */
 
+/* http://elinux.org/CircuitCo:Audio_Cape_RevA */
+/* #include "am335x-bone-audio-reva.dtsi" */
+
 /* http://elinux.org/CircuitCo:Audio_Cape_RevB */
 /* Pins: P9.24, P9.28, P9.29, P9.31, P9.30 */
-/* #include "am335x-bone-audio.dtsi" */
+/* #include "am335x-bone-audio-revb.dtsi" */
 
 /* http://elinux.org/CircuitCo:BeagleBone_LCD3 */
 /* #include "am335x-bone-lcd3-01-00a2.dtsi" */
@@ -90,6 +117,9 @@
 /* #include "am335x-bone-lcd7-01-00a2.dtsi" */
 /* #include "am335x-bone-lcd7-01-00a3.dtsi" */
 
+/* http://www.chipsee.com/product/evm/beagle/beaglebone-black-expansion-capacitive.html */
+/* #include "am335x-bone-bbb-exp-c.dtsi" */
+
 /* http://elinux.org/CircuitCo:RTC_Cape */
 /* i2c1: P9.17, P9.18 */
 /* gpio: P8.26 (mfp: wakeup) */
@@ -101,4 +131,4 @@
 /* #include "am335x-bone-crypto-00a0.dtsi" */
 
 /* http://elinux.org/CircuitCo:Basic_Proto_Cape */
-#include "am335x-bone-basic-proto-cape.dtsi"
+/* #include "am335x-bone-basic-proto-cape.dtsi" */

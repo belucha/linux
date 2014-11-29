@@ -229,7 +229,6 @@ dtb-$(CONFIG_ARCH_OMAP2PLUS) += omap2420-h4.dtb \
 	am335x-evmsk.dtb \
 	am335x-bone.dtb \
 	am335x-boneblack.dtb \
-	intronik.dtb \
 	am335x-boneblack-ttyO5.dtb \
 	am335x-boneblack-ttyO4.dtb \
 	am335x-boneblack-ttyO2.dtb \
@@ -239,13 +238,17 @@ dtb-$(CONFIG_ARCH_OMAP2PLUS) += omap2420-h4.dtb \
 	am335x-boneblack-lcd7-01-00a2.dtb \
 	am335x-boneblack-lcd4-01-00a1.dtb \
 	am335x-boneblack-lcd3-01-00a2.dtb \
+	am335x-boneblack-bbb-exp-c.dtb \
 	am335x-boneblack-4dcape-70t.dtb \
 	am335x-boneblack-4dcape-70.dtb \
 	am335x-boneblack-4dcape-43t.dtb \
 	am335x-boneblack-4dcape-43.dtb \
 	am335x-boneblack-crypto-00a0.dtb \
 	am335x-boneblack-cape-bone-argus.dtb \
-	am335x-boneblack-audio.dtb \
+	am335x-boneblack-can1.dtb \
+	am335x-boneblack-bb-view-43.dtb \
+	am335x-boneblack-audio-revb.dtb \
+	am335x-boneblack-audio-reva.dtb \
 	am335x-bone-ttyO5.dtb \
 	am335x-bone-ttyO4.dtb \
 	am335x-bone-ttyO2.dtb \
@@ -255,9 +258,17 @@ dtb-$(CONFIG_ARCH_OMAP2PLUS) += omap2420-h4.dtb \
 	am335x-bone-lcd7-01-00a2.dtb \
 	am335x-bone-lcd4-01-00a1.dtb \
 	am335x-bone-lcd3-01-00a2.dtb \
+	am335x-bone-bbb-exp-c.dtb \
+	am335x-bone-4dcape-70t.dtb \
+	am335x-bone-4dcape-70.dtb \
+	am335x-bone-4dcape-43t.dtb \
+	am335x-bone-4dcape-43.dtb \
 	am335x-bone-crypto-00a0.dtb \
 	am335x-bone-cape-bone-argus.dtb \
-	am335x-bone-audio.dtb \
+	am335x-bone-can1.dtb \
+	am335x-bone-bb-view-43.dtb \
+	am335x-bone-audio-revb.dtb \
+	am335x-bone-audio-reva.dtb \
 	am335x-nano.dtb \
 	am335x-base0033.dtb \
 	am3517-craneboard.dtb \
@@ -269,7 +280,11 @@ dtb-$(CONFIG_ARCH_OMAP2PLUS) += omap2420-h4.dtb \
 	am437x-gp-evm-hdmi.dtb \
 	am437x-sk-evm.dtb \
 	dra7-evm.dtb \
+	dra7-evm-lcd7.dtb \
+	dra7-evm-lcd10.dtb \
 	dra72-evm.dtb \
+	dra72-evm-lcd7.dtb \
+	dra72-evm-lcd10.dtb \
 	am57xx-beagle-x15.dtb
 dtb-$(CONFIG_ARCH_ORION5X) += orion5x-lacie-ethernet-disk-mini-v2.dtb
 dtb-$(CONFIG_ARCH_PRIMA2) += prima2-evb.dtb

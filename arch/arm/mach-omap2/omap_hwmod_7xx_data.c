@@ -50,6 +50,48 @@
  */
 
 /*
+ * 'dmm' class
+ * instance(s): dmm
+ */
+static struct omap_hwmod_class dra7xx_dmm_hwmod_class = {
+	.name	= "dmm",
+};
+
+/* dmm */
+static struct omap_hwmod dra7xx_dmm_hwmod = {
+	.name		= "dmm",
+	.class		= &dra7xx_dmm_hwmod_class,
+	.clkdm_name	= "emif_clkdm",
+	.prcm = {
+		.omap4 = {
+			.clkctrl_offs = DRA7XX_CM_EMIF_DMM_CLKCTRL_OFFSET,
+			.context_offs = DRA7XX_RM_EMIF_DMM_CONTEXT_OFFSET,
+		},
+	},
+};
+
+/*
+ * 'emif_ocp_fw' class
+ * instance(s): emif_ocp_fw
+ */
+static struct omap_hwmod_class dra7xx_emif_ocp_fw_hwmod_class = {
+	.name	= "emif_ocp_fw",
+};
+
+/* emif_ocp_fw */
+static struct omap_hwmod dra7xx_emif_ocp_fw_hwmod = {
+	.name		= "emif_ocp_fw",
+	.class		= &dra7xx_emif_ocp_fw_hwmod_class,
+	.clkdm_name	= "emif_clkdm",
+	.prcm = {
+		.omap4 = {
+			.clkctrl_offs = DRA7XX_CM_EMIF_EMIF_OCP_FW_CLKCTRL_OFFSET,
+			.context_offs = DRA7XX_RM_EMIF_EMIF_OCP_FW_CONTEXT_OFFSET,
+		},
+	},
+};
+
+/*
  * 'l3' class
  * instance(s): l3_instr, l3_main_1, l3_main_2
  */
@@ -228,8 +270,8 @@ static struct omap_hwmod_class_sysconfig dra7xx_vpe_sysc = {
 	.sysc_offs	= 0x0010,
 	.sysc_flags	= (SYSC_HAS_MIDLEMODE | SYSC_HAS_SIDLEMODE),
 	.idlemodes	= (SIDLE_FORCE | SIDLE_NO | SIDLE_SMART |
-			   SIDLE_SMART_WKUP | MSTANDBY_FORCE | MSTANDBY_NO |
-			   MSTANDBY_SMART | MSTANDBY_SMART_WKUP),
+			   MSTANDBY_FORCE | MSTANDBY_NO |
+			   MSTANDBY_SMART),
 	.sysc_fields	= &omap_hwmod_sysc_type2,
 };
 
@@ -243,6 +285,7 @@ static struct omap_hwmod dra7xx_vpe_hwmod = {
 	.name		= "vpe",
 	.class		= &dra7xx_vpe_hwmod_class,
 	.clkdm_name	= "vpe_clkdm",
+	.flags		= (HWMOD_SWSUP_SIDLE | HWMOD_SWSUP_MSTANDBY),
 	.prcm = {
 		.omap4 = {
 			.clkctrl_offs = DRA7XX_CM_VPE_VPE_CLKCTRL_OFFSET,
@@ -261,8 +304,8 @@ static struct omap_hwmod_class_sysconfig dra7xx_vip_sysc = {
 	.sysc_offs	= 0x0010,
 	.sysc_flags	= (SYSC_HAS_MIDLEMODE | SYSC_HAS_SIDLEMODE),
 	.idlemodes	= (SIDLE_FORCE | SIDLE_NO | SIDLE_SMART |
-			   SIDLE_SMART_WKUP | MSTANDBY_FORCE | MSTANDBY_NO |
-			   MSTANDBY_SMART | MSTANDBY_SMART_WKUP),
+			   MSTANDBY_FORCE | MSTANDBY_NO |
+			   MSTANDBY_SMART),
 	.sysc_fields	= &omap_hwmod_sysc_type2,
 };
 
@@ -277,6 +320,7 @@ static struct omap_hwmod dra7xx_vip1_hwmod = {
 	.class		= &dra7xx_vip_hwmod_class,
 	.clkdm_name	= "cam_clkdm",
 	.main_clk	= "vip1_gclk_mux",
+	.flags		= (HWMOD_SWSUP_SIDLE | HWMOD_SWSUP_MSTANDBY),
 	.prcm = {
 		.omap4 = {
 			.clkctrl_offs = DRA7XX_CM_CAM_VIP1_CLKCTRL_OFFSET,
@@ -292,6 +336,7 @@ static struct omap_hwmod dra7xx_vip2_hwmod = {
 	.class		= &dra7xx_vip_hwmod_class,
 	.clkdm_name	= "cam_clkdm",
 	.main_clk	= "vip2_gclk_mux",
+	.flags		= (HWMOD_SWSUP_SIDLE | HWMOD_SWSUP_MSTANDBY),
 	.prcm = {
 		.omap4 = {
 			.clkctrl_offs = DRA7XX_CM_CAM_VIP2_CLKCTRL_OFFSET,
@@ -307,6 +352,7 @@ static struct omap_hwmod dra7xx_vip3_hwmod = {
 	.class		= &dra7xx_vip_hwmod_class,
 	.clkdm_name	= "cam_clkdm",
 	.main_clk	= "vip3_gclk_mux",
+	.flags		= (HWMOD_SWSUP_SIDLE | HWMOD_SWSUP_MSTANDBY),
 	.prcm = {
 		.omap4 = {
 			.clkctrl_offs = DRA7XX_CM_CAM_VIP3_CLKCTRL_OFFSET,
@@ -323,10 +369,10 @@ static struct omap_hwmod dra7xx_vip3_hwmod = {
 
 static struct omap_hwmod_class_sysconfig dra7xx_cal_sysc = {
 	.sysc_offs	= 0x0010,
-	.sysc_flags	= (SYSC_HAS_MIDLEMODE | SYSC_HAS_SIDLEMODE),
+	.sysc_flags	= (SYSC_HAS_SIDLEMODE | SYSC_HAS_RESET_STATUS |
+			   SYSC_HAS_SOFTRESET | SYSC_HAS_MIDLEMODE),
 	.idlemodes	= (SIDLE_FORCE | SIDLE_NO | SIDLE_SMART |
-			   SIDLE_SMART_WKUP | MSTANDBY_FORCE | MSTANDBY_NO |
-			   MSTANDBY_SMART | MSTANDBY_SMART_WKUP),
+			   MSTANDBY_FORCE | MSTANDBY_NO),
 	.sysc_fields	= &omap_hwmod_sysc_type2,
 };
 
@@ -341,6 +387,7 @@ static struct omap_hwmod dra7xx_cal_hwmod = {
 	.class		= &dra7xx_cal_hwmod_class,
 	.clkdm_name	= "cam_clkdm",
 	.main_clk	= "vip2_gclk_mux",
+	.flags		= (HWMOD_SWSUP_SIDLE | HWMOD_SWSUP_MSTANDBY),
 	.prcm = {
 		.omap4 = {
 			.clkctrl_offs = DRA7XX_CM_CAM_VIP2_CLKCTRL_OFFSET,
@@ -1052,7 +1099,8 @@ static struct omap_hwmod dra7xx_gpmc_hwmod = {
 	.name		= "gpmc",
 	.class		= &dra7xx_gpmc_hwmod_class,
 	.clkdm_name	= "l3main1_clkdm",
-	.flags		= HWMOD_INIT_NO_IDLE | HWMOD_INIT_NO_RESET,
+	.flags		= (HWMOD_INIT_NO_IDLE | HWMOD_INIT_NO_RESET |
+			   HWMOD_SWSUP_SIDLE),
 	.main_clk	= "l3_iclk_div",
 	.prcm = {
 		.omap4 = {
@@ -2051,6 +2099,7 @@ static struct omap_hwmod_class_sysconfig dra7xx_rtcss_sysc = {
 static struct omap_hwmod_class dra7xx_rtcss_hwmod_class = {
 	.name	= "rtcss",
 	.sysc	= &dra7xx_rtcss_sysc,
+	.reset	= &omap_hwmod_rtc_unlock,
 };
 
 /* rtcss */
@@ -2542,6 +2591,70 @@ static struct omap_hwmod dra7xx_uart6_hwmod = {
 	},
 };
 
+/* uart7 */
+static struct omap_hwmod dra7xx_uart7_hwmod = {
+	.name		= "uart7",
+	.class		= &dra7xx_uart_hwmod_class,
+	.clkdm_name	= "l4per2_clkdm",
+	.main_clk	= "uart7_gfclk_mux",
+	.flags		= HWMOD_SWSUP_SIDLE_ACT,
+	.prcm = {
+		.omap4 = {
+			.clkctrl_offs = DRA7XX_CM_L4PER2_UART7_CLKCTRL_OFFSET,
+			.context_offs = DRA7XX_RM_L4PER2_UART7_CONTEXT_OFFSET,
+			.modulemode   = MODULEMODE_SWCTRL,
+		},
+	},
+};
+
+/* uart8 */
+static struct omap_hwmod dra7xx_uart8_hwmod = {
+	.name		= "uart8",
+	.class		= &dra7xx_uart_hwmod_class,
+	.clkdm_name	= "l4per2_clkdm",
+	.main_clk	= "uart8_gfclk_mux",
+	.flags		= HWMOD_SWSUP_SIDLE_ACT,
+	.prcm = {
+		.omap4 = {
+			.clkctrl_offs = DRA7XX_CM_L4PER2_UART8_CLKCTRL_OFFSET,
+			.context_offs = DRA7XX_RM_L4PER2_UART8_CONTEXT_OFFSET,
+			.modulemode   = MODULEMODE_SWCTRL,
+		},
+	},
+};
+
+/* uart9 */
+static struct omap_hwmod dra7xx_uart9_hwmod = {
+	.name		= "uart9",
+	.class		= &dra7xx_uart_hwmod_class,
+	.clkdm_name	= "l4per2_clkdm",
+	.main_clk	= "uart9_gfclk_mux",
+	.flags		= HWMOD_SWSUP_SIDLE_ACT,
+	.prcm = {
+		.omap4 = {
+			.clkctrl_offs = DRA7XX_CM_L4PER2_UART9_CLKCTRL_OFFSET,
+			.context_offs = DRA7XX_RM_L4PER2_UART9_CONTEXT_OFFSET,
+			.modulemode   = MODULEMODE_SWCTRL,
+		},
+	},
+};
+
+/* uart10 */
+static struct omap_hwmod dra7xx_uart10_hwmod = {
+	.name		= "uart10",
+	.class		= &dra7xx_uart_hwmod_class,
+	.clkdm_name	= "wkupaon_clkdm",
+	.main_clk	= "uart10_gfclk_mux",
+	.flags		= HWMOD_SWSUP_SIDLE_ACT,
+	.prcm = {
+		.omap4 = {
+			.clkctrl_offs = DRA7XX_CM_WKUPAON_UART10_CLKCTRL_OFFSET,
+			.context_offs = DRA7XX_RM_WKUPAON_UART10_CONTEXT_OFFSET,
+			.modulemode   = MODULEMODE_SWCTRL,
+		},
+	},
+};
+
 /* DES (the 'P' (public) device) */
 static struct omap_hwmod_class_sysconfig dra7xx_des_sysc = {
 	.rev_offs	= 0x0030,
@@ -2783,6 +2896,36 @@ static struct omap_hwmod_ocp_if dra7xx_l3_main_2__l3_instr = {
 static struct omap_hwmod_ocp_if dra7xx_l4_cfg__l3_main_1 = {
 	.master		= &dra7xx_l4_cfg_hwmod,
 	.slave		= &dra7xx_l3_main_1_hwmod,
+	.clk		= "l3_iclk_div",
+	.user		= OCP_USER_MPU | OCP_USER_SDMA,
+};
+
+/*
+ * Interfaces
+ */
+
+static struct omap_hwmod_addr_space dra7xx_dmm_addrs[] = {
+	{
+		.pa_start	= 0x4e000000,
+		.pa_end		= 0x4e0007ff,
+		.flags		= ADDR_TYPE_RT
+	},
+	{ }
+};
+
+/* l3_main_1 -> dmm */
+static struct omap_hwmod_ocp_if dra7xx_l3_main_1__dmm = {
+	.master		= &dra7xx_l3_main_1_hwmod,
+	.slave		= &dra7xx_dmm_hwmod,
+	.clk		= "l3_iclk_div",
+	.addr		= dra7xx_dmm_addrs,
+	.user		= OCP_USER_SDMA,
+};
+
+/* dmm -> emif_ocp_fw */
+static struct omap_hwmod_ocp_if dra7xx_dmm__emif_ocp_fw = {
+	.master		= &dra7xx_dmm_hwmod,
+	.slave		= &dra7xx_emif_ocp_fw_hwmod,
 	.clk		= "l3_iclk_div",
 	.user		= OCP_USER_MPU | OCP_USER_SDMA,
 };
@@ -3722,6 +3865,38 @@ static struct omap_hwmod_ocp_if dra7xx_l4_per1__uart6 = {
 	.user		= OCP_USER_MPU | OCP_USER_SDMA,
 };
 
+/* l4_per2 -> uart7 */
+static struct omap_hwmod_ocp_if dra7xx_l4_per2__uart7 = {
+	.master		= &dra7xx_l4_per2_hwmod,
+	.slave		= &dra7xx_uart7_hwmod,
+	.clk		= "l3_iclk_div",
+	.user		= OCP_USER_MPU | OCP_USER_SDMA,
+};
+
+/* l4_per2 -> uart8 */
+static struct omap_hwmod_ocp_if dra7xx_l4_per2__uart8 = {
+	.master		= &dra7xx_l4_per2_hwmod,
+	.slave		= &dra7xx_uart8_hwmod,
+	.clk		= "l3_iclk_div",
+	.user		= OCP_USER_MPU | OCP_USER_SDMA,
+};
+
+/* l4_per2 -> uart9 */
+static struct omap_hwmod_ocp_if dra7xx_l4_per2__uart9 = {
+	.master		= &dra7xx_l4_per2_hwmod,
+	.slave		= &dra7xx_uart9_hwmod,
+	.clk		= "l3_iclk_div",
+	.user		= OCP_USER_MPU | OCP_USER_SDMA,
+};
+
+/* l4_wkup -> uart10 */
+static struct omap_hwmod_ocp_if dra7xx_l4_wkup__uart10 = {
+	.master		= &dra7xx_l4_wkup_hwmod,
+	.slave		= &dra7xx_uart10_hwmod,
+	.clk		= "wkupaon_iclk_mux",
+	.user		= OCP_USER_MPU | OCP_USER_SDMA,
+};
+
 /* l4_per1 -> des */
 static struct omap_hwmod_ocp_if dra7xx_l4_per1__des = {
 	.master		= &dra7xx_l4_per1_hwmod,
@@ -3850,6 +4025,8 @@ static struct omap_hwmod_ocp_if dra7xx_l4_wkup__wd_timer2 = {
 };
 
 static struct omap_hwmod_ocp_if *dra7xx_hwmod_ocp_ifs[] __initdata = {
+	&dra7xx_l3_main_1__dmm,
+	&dra7xx_dmm__emif_ocp_fw,
 	&dra7xx_l3_main_2__l3_instr,
 	&dra7xx_l4_cfg__l3_main_1,
 	&dra7xx_mpu__l3_main_1,
@@ -3951,6 +4128,10 @@ static struct omap_hwmod_ocp_if *dra7xx_hwmod_ocp_ifs[] __initdata = {
 	&dra7xx_l4_per1__uart4,
 	&dra7xx_l4_per1__uart5,
 	&dra7xx_l4_per1__uart6,
+	&dra7xx_l4_per2__uart7,
+	&dra7xx_l4_per2__uart8,
+	&dra7xx_l4_per2__uart9,
+	&dra7xx_l4_wkup__uart10,
 	&dra7xx_l4_per1__des,
 	&dra7xx_l4_per1__rng,
 	&dra7xx_l4_per3__usb_otg_ss1,

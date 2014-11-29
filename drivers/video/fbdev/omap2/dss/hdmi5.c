@@ -223,6 +223,7 @@ static int hdmi_power_on_full(struct omap_dss_device *dssdev)
 	struct omap_overlay_manager *mgr = hdmi.output.manager;
 	unsigned long phy;
 	struct pll_params param;
+	bool ok;
 
 	r = hdmi_power_on_core(dssdev);
 	if (r)
@@ -236,7 +237,11 @@ static int hdmi_power_on_full(struct omap_dss_device *dssdev)
 
 	memset(&param, 0, sizeof(param));
 
-	pll_calc(hdmi.pll, phy, phy, NULL, &param);
+	ok = pll_calc(hdmi.pll, phy, phy, NULL, &param);
+	if (!ok) {
+		DSSDBG("Failed to calculate PLL settings\n");
+		goto err_pll_enable;
+	}
 
 	/* disable and clear irqs */
 	hdmi_wp_clear_irqenable(&hdmi.wp, 0xffffffff);
@@ -612,10 +617,25 @@ static int audio_enable(struct device *dev, bool enable)
 	int ret;
 
 	mutex_lock(&hd->lock);
+
+	if (enable) {
+		/* No idle while playing audio */
+		hd->wp_idlemode =
+			REG_GET(hdmi.wp.base, HDMI_WP_SYSCONFIG, 3, 2);
+		REG_FLD_MOD(hdmi.wp.base, HDMI_WP_SYSCONFIG, 1, 3, 2);
+	}
+
 	if (!hdmi_mode_has_audio(&hd->cfg))
 		ret = -EPERM;
 	else
 		ret = hdmi_wp_audio_enable(&hd->wp, enable);
+
+	if (!enable) {
+		/* Playback stopped, restore original idlemode */
+		REG_FLD_MOD(hdmi.wp.base, HDMI_WP_SYSCONFIG, hd->wp_idlemode,
+			    3, 2);
+	}
+
 	mutex_unlock(&hd->lock);
 
 	return ret;

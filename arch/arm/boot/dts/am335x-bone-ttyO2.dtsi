@@ -6,9 +6,13 @@
  * published by the Free Software Foundation.
  */
 
-&uart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart2_pins>;
+#include "am335x-ttyO2.dtsi"
 
-	status = "okay";
+&ocp {
+	P9_21_pinmux {
+		mode = "uart";
+	};
+	P9_22_pinmux {
+		mode = "uart";
+	};
 };

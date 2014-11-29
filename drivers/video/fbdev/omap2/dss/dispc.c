@@ -36,12 +36,16 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/sizes.h>
+#include <linux/mfd/syscon.h>
+#include <linux/regmap.h>
 
 #include <video/omapdss.h>
 
 #include "dss.h"
 #include "dss_features.h"
 #include "dispc.h"
+
+#define CTRL_CORE_SMA_SW_1	0x534
 
 /* DISPC */
 #define DISPC_SZ_REGS			SZ_4K
@@ -95,6 +99,9 @@ struct dispc_features {
 
 	/* alternate pixel clock source is DSI PLL, or VIDEO PLL */
 	bool alt_clk_dsi_pll:1;
+
+	/* polarities must be programmed to CTRL_CORE_SMA_SW_1 also */
+	bool has_ctrl_core_sma_sw_1:1;
 };
 
 #define DISPC_MAX_NR_FIFOS 5
@@ -120,6 +127,11 @@ static struct {
 	const struct dispc_features *feat;
 
 	bool is_enabled;
+
+	struct regmap	*syscon;
+
+	/* DISPC_CONTROL & DISPC_CONFIG lock*/
+	spinlock_t control_lock;
 } dispc;
 
 enum omap_color_component {
@@ -258,7 +270,16 @@ static u32 mgr_fld_read(enum omap_channel channel, enum mgr_reg_fields regfld)
 static void mgr_fld_write(enum omap_channel channel,
 					enum mgr_reg_fields regfld, int val) {
 	const struct dispc_reg_field rfld = mgr_desc[channel].reg_desc[regfld];
+	const bool need_lock = rfld.reg == DISPC_CONTROL || rfld.reg == DISPC_CONFIG;
+	unsigned long flags;
+
+	if (need_lock)
+		spin_lock_irqsave(&dispc.control_lock, flags);
+
 	REG_FLD_MOD(rfld.reg, val, rfld.high, rfld.low);
+
+	if (need_lock)
+		spin_unlock_irqrestore(&dispc.control_lock, flags);
 }
 
 #define SR(reg) \
@@ -1123,6 +1144,7 @@ static void dispc_init_fifos(void)
 	int fifo;
 	u8 start, end;
 	u32 unit;
+	int i;
 
 	unit = dss_feat_get_buffer_size_unit();
 
@@ -1161,6 +1183,20 @@ static void dispc_init_fifos(void)
 
 		dispc.fifo_assignment[OMAP_DSS_GFX] = OMAP_DSS_WB;
 		dispc.fifo_assignment[OMAP_DSS_WB] = OMAP_DSS_GFX;
+	}
+
+	/*
+	 * Setup default fifo thresholds.
+	 */
+	for (i = 0; i < dss_feat_get_num_ovls(); ++i) {
+		u32 low, high;
+		const bool use_fifomerge = false;
+		const bool manual_update = false;
+
+		dispc_ovl_compute_fifo_thresholds(i, &low, &high,
+			use_fifomerge, manual_update);
+
+		dispc_ovl_set_fifo_threshold(i, low, high);
 	}
 }
 
@@ -1274,6 +1310,63 @@ void dispc_ovl_compute_fifo_thresholds(enum omap_plane plane,
 	}
 }
 EXPORT_SYMBOL(dispc_ovl_compute_fifo_thresholds);
+
+static void dispc_ovl_set_mflag(enum omap_plane plane, bool enable)
+{
+	int bit;
+
+	if (plane == OMAP_DSS_GFX)
+		bit = 14;
+	else
+		bit = 23;
+
+	REG_FLD_MOD(DISPC_OVL_ATTRIBUTES(plane), enable, bit, bit);
+}
+
+static void dispc_ovl_set_mflag_threshold(enum omap_plane plane,
+	int low, int high)
+{
+	dispc_write_reg(DISPC_OVL_MFLAG_THRESHOLD(plane),
+		FLD_VAL(high, 31, 16) |	FLD_VAL(low, 15, 0));
+}
+
+static void dispc_init_mflag(void)
+{
+	int i;
+
+	/*
+	 * HACK: NV12 color format and MFLAG seem to have problems working
+	 * together: using two displays, and having an NV12 overlay on one of
+	 * the displays will cause underflows/synclosts when MFLAG_CTRL=2.
+	 * Changing MFLAG thresholds and PRELOAD to certain values seem to
+	 * remove the errors, but there doesn't seem to be a clear logic on
+	 * which values work and which not.
+	 *
+	 * As a work-around, set force MFLAG to always on.
+	 */
+	dispc_write_reg(DISPC_GLOBAL_MFLAG_ATTRIBUTE,
+		(1 << 0) |	/* MFLAG_CTRL = force always on */
+		(0 << 2));	/* MFLAG_START = disable */
+
+	for (i = 0; i < dss_feat_get_num_ovls(); ++i) {
+		u32 size = dispc_ovl_get_fifo_size(i);
+		u32 unit = dss_feat_get_buffer_size_unit();
+		u32 low, high;
+
+		dispc_ovl_set_mflag(i, true);
+
+		/*
+		 * Simulation team suggests below thesholds:
+		 * HT = fifosize * 5 / 8;
+		 * LT = fifosize * 4 / 8;
+		 */
+
+		low = size * 4 / 8 / unit;
+		high = size * 5 / 8 / unit;
+
+		dispc_ovl_set_mflag_threshold(i, low, high);
+	}
+}
 
 static void dispc_ovl_set_fir(enum omap_plane plane,
 				int hinc, int vinc,
@@ -2319,6 +2412,11 @@ static int dispc_ovl_calc_scaling(unsigned long pclk, unsigned long lclk,
 	if (width == out_width && height == out_height)
 		return 0;
 
+	if (pclk == 0 || mgr_timings->pixelclock == 0) {
+		DSSERR("cannot calculate scaling settings: pclk is zero\n");
+		return -EINVAL;
+	}
+
 	if ((caps & OMAP_DSS_OVL_CAP_SCALE) == 0)
 		return -EINVAL;
 
@@ -2912,7 +3010,7 @@ static void _dispc_mgr_set_lcd_timings(enum omap_channel channel, int hsw,
 
 {
 	u32 timing_h, timing_v, l;
-	bool onoff, rf, ipc;
+	bool onoff, rf, ipc, vs, hs, de;
 
 	timing_h = FLD_VAL(hsw-1, dispc.feat->sw_start, 0) |
 			FLD_VAL(hfp-1, dispc.feat->fp_start, 8) |
@@ -2924,6 +3022,39 @@ static void _dispc_mgr_set_lcd_timings(enum omap_channel channel, int hsw,
 	dispc_write_reg(DISPC_TIMING_H(channel), timing_h);
 	dispc_write_reg(DISPC_TIMING_V(channel), timing_v);
 
+	switch (vsync_level) {
+	case OMAPDSS_SIG_ACTIVE_LOW:
+		vs = true;
+		break;
+	case OMAPDSS_SIG_ACTIVE_HIGH:
+		vs = false;
+		break;
+	default:
+		BUG();
+	}
+
+	switch (hsync_level) {
+	case OMAPDSS_SIG_ACTIVE_LOW:
+		hs = true;
+		break;
+	case OMAPDSS_SIG_ACTIVE_HIGH:
+		hs = false;
+		break;
+	default:
+		BUG();
+	}
+
+	switch (de_level) {
+	case OMAPDSS_SIG_ACTIVE_LOW:
+		de = true;
+		break;
+	case OMAPDSS_SIG_ACTIVE_HIGH:
+		de = false;
+		break;
+	default:
+		BUG();
+	}
+
 	switch (data_pclk_edge) {
 	case OMAPDSS_DRIVE_SIG_RISING_EDGE:
 		ipc = false;
@@ -2931,22 +3062,18 @@ static void _dispc_mgr_set_lcd_timings(enum omap_channel channel, int hsw,
 	case OMAPDSS_DRIVE_SIG_FALLING_EDGE:
 		ipc = true;
 		break;
-	case OMAPDSS_DRIVE_SIG_OPPOSITE_EDGES:
 	default:
 		BUG();
 	}
 
+	/* always use the 'rf' setting */
+	onoff = true;
+
 	switch (sync_pclk_edge) {
-	case OMAPDSS_DRIVE_SIG_OPPOSITE_EDGES:
-		onoff = false;
-		rf = false;
-		break;
 	case OMAPDSS_DRIVE_SIG_FALLING_EDGE:
-		onoff = true;
 		rf = false;
 		break;
 	case OMAPDSS_DRIVE_SIG_RISING_EDGE:
-		onoff = true;
 		rf = true;
 		break;
 	default:
@@ -2955,12 +3082,30 @@ static void _dispc_mgr_set_lcd_timings(enum omap_channel channel, int hsw,
 
 	l = FLD_VAL(onoff, 17, 17) |
 		FLD_VAL(rf, 16, 16) |
-		FLD_VAL(de_level, 15, 15) |
+		FLD_VAL(de, 15, 15) |
 		FLD_VAL(ipc, 14, 14) |
-		FLD_VAL(hsync_level, 13, 13) |
-		FLD_VAL(vsync_level, 12, 12);
+		FLD_VAL(hs, 13, 13) |
+		FLD_VAL(vs, 12, 12);
 
 	dispc_write_reg(DISPC_POL_FREQ(channel), l);
+
+	if (dispc.feat->has_ctrl_core_sma_sw_1) {
+		const int shifts[] = {
+			[OMAP_DSS_CHANNEL_LCD] = 0,
+			[OMAP_DSS_CHANNEL_LCD2] = 1,
+			[OMAP_DSS_CHANNEL_LCD3] = 2,
+		};
+
+		u32 mask, val;
+
+		mask = (1 << 0) | (1 << 3) | (1 << 6);
+		val = (rf << 0) | (ipc << 3) | (onoff << 6);
+
+		mask <<= 16 + shifts[channel];
+		val <<= 16 + shifts[channel];
+
+		regmap_update_bits(dispc.syscon, CTRL_CORE_SMA_SW_1, mask, val);
+	}
 }
 
 /* change name to mode? */
@@ -3313,8 +3458,11 @@ static void dispc_dump_regs(struct seq_file *s)
 		DUMPREG(i, DISPC_OVL_FIFO_SIZE_STATUS);
 		DUMPREG(i, DISPC_OVL_ROW_INC);
 		DUMPREG(i, DISPC_OVL_PIXEL_INC);
+
 		if (dss_has_feature(FEAT_PRELOAD))
 			DUMPREG(i, DISPC_OVL_PRELOAD);
+		if (dss_has_feature(FEAT_MFLAG))
+			DUMPREG(i, DISPC_OVL_MFLAG_THRESHOLD);
 
 		if (i == OMAP_DSS_GFX) {
 			DUMPREG(i, DISPC_OVL_WINDOW_SKIP);
@@ -3335,10 +3483,6 @@ static void dispc_dump_regs(struct seq_file *s)
 		}
 		if (dss_has_feature(FEAT_ATTR2))
 			DUMPREG(i, DISPC_OVL_ATTRIBUTES2);
-		if (dss_has_feature(FEAT_PRELOAD))
-			DUMPREG(i, DISPC_OVL_PRELOAD);
-		if (dss_has_feature(FEAT_MFLAG))
-			DUMPREG(i, DISPC_OVL_MFLAG_THRESHOLD);
 	}
 
 #undef DISPC_REG
@@ -3556,6 +3700,9 @@ static void _omap_dispc_initial_config(void)
 
 	if (dispc.feat->mstandby_workaround)
 		REG_FLD_MOD(DISPC_MSTANDBY_CTRL, 1, 0, 0);
+
+	if (dss_has_feature(FEAT_MFLAG))
+		dispc_init_mflag();
 }
 
 static const struct dispc_features omap24xx_dispc_feats __initconst = {
@@ -3683,6 +3830,7 @@ static const struct dispc_features dra7xx_dispc_feats __initconst = {
 	.mstandby_workaround	=	true,
 	.set_max_preload	=	true,
 	.alt_clk_dsi_pll	=	false,
+	.has_ctrl_core_sma_sw_1	=	true,
 };
 
 static int __init dispc_init_features(struct platform_device *pdev)
@@ -3787,6 +3935,8 @@ static int __init omap_dispchw_probe(struct platform_device *pdev)
 
 	dispc.pdev = pdev;
 
+	spin_lock_init(&dispc.control_lock);
+
 	r = dispc_init_features(dispc.pdev);
 	if (r)
 		return r;
@@ -3808,6 +3958,16 @@ static int __init omap_dispchw_probe(struct platform_device *pdev)
 	if (dispc.irq < 0) {
 		DSSERR("platform_get_irq failed\n");
 		return -ENODEV;
+	}
+
+	if (dispc.feat->has_ctrl_core_sma_sw_1) {
+		struct device_node *np = pdev->dev.of_node;
+
+		dispc.syscon = syscon_regmap_lookup_by_phandle(np, "syscon");
+		if (IS_ERR(dispc.syscon)) {
+			dev_err(&pdev->dev, "failed to get syscon regmap\n");
+			return PTR_ERR(dispc.syscon);
+		}
 	}
 
 	pm_runtime_enable(&pdev->dev);

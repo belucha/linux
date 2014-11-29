@@ -153,6 +153,8 @@ static void omap_plane_pre_apply(struct omap_drm_apply *apply)
 	ilace = false;
 	replication = false;
 
+	dispc_ovl_set_channel_out(omap_plane->id, channel);
+
 	/* and finally, update omapdss: */
 	ret = dispc_ovl_setup(omap_plane->id, info,
 			replication, omap_crtc_timings(crtc), false);
@@ -162,7 +164,6 @@ static void omap_plane_pre_apply(struct omap_drm_apply *apply)
 	}
 
 	dispc_ovl_enable(omap_plane->id, true);
-	dispc_ovl_set_channel_out(omap_plane->id, channel);
 }
 
 static void omap_plane_post_apply(struct omap_drm_apply *apply)
@@ -207,6 +208,24 @@ int omap_plane_mode_set(struct drm_plane *plane,
 {
 	struct omap_plane *omap_plane = to_omap_plane(plane);
 	struct omap_drm_window *win = &omap_plane->win;
+	int i;
+
+	/*
+	 * Check whether this plane supports the fb pixel format.
+	 * I don't think this should really be needed, but it looks like the
+	 * drm core only checks the format for planes, not for the crtc. So
+	 * when setting the format for crtc, without this check we would
+	 * get an error later when trying to program the color format into the
+	 * HW.
+	 */
+	for (i = 0; i < plane->format_count; i++)
+		if (fb->pixel_format == plane->format_types[i])
+			break;
+	if (i == plane->format_count) {
+		DBG("Invalid pixel format %s",
+			      drm_get_format_name(fb->pixel_format));
+		return -EINVAL;
+	}
 
 	win->crtc_x = crtc_x;
 	win->crtc_y = crtc_y;
@@ -370,7 +389,8 @@ static void omap_plane_error_irq(struct omap_drm_irq *irq, uint32_t irqstatus)
 {
 	struct omap_plane *omap_plane =
 			container_of(irq, struct omap_plane, error_irq);
-	DRM_ERROR("%s: errors: %08x\n", omap_plane->name, irqstatus);
+	DRM_ERROR_RATELIMITED("%s: errors: %08x\n", omap_plane->name,
+		irqstatus);
 }
 
 static const char *plane_names[] = {

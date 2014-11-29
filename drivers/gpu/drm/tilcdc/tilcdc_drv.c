@@ -17,6 +17,7 @@
 
 /* LCDC DRM driver, based on da8xx-fb */
 
+#include <linux/pinctrl/consumer.h>
 #include <linux/suspend.h>
 #include "tilcdc_drv.h"
 #include "tilcdc_regs.h"
@@ -85,6 +86,7 @@ static int modeset_init(struct drm_device *dev)
 	if ((priv->num_encoders == 0) || (priv->num_connectors == 0)) {
 		/* oh nos! */
 		dev_err(dev->dev, "no encoders/connectors found\n");
+		drm_mode_config_cleanup(dev);
 		return -ENXIO;
 	}
 
@@ -123,6 +125,7 @@ static int tilcdc_unload(struct drm_device *dev)
 	struct tilcdc_drm_private *priv = dev->dev_private;
 	struct tilcdc_module *mod, *cur;
 
+	drm_fbdev_cma_fini(priv->fbdev);
 	drm_kms_helper_poll_fini(dev);
 	drm_mode_config_cleanup(dev);
 	drm_vblank_cleanup(dev);
@@ -178,26 +181,30 @@ static int tilcdc_load(struct drm_device *dev, unsigned long flags)
 	dev->dev_private = priv;
 
 	priv->wq = alloc_ordered_workqueue("tilcdc", 0);
+	if (!priv->wq) {
+		ret = -ENOMEM;
+		goto fail_free_priv;
+	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		dev_err(dev->dev, "failed to get memory resource\n");
 		ret = -EINVAL;
-		goto fail;
+		goto fail_free_wq;
 	}
 
 	priv->mmio = ioremap_nocache(res->start, resource_size(res));
 	if (!priv->mmio) {
 		dev_err(dev->dev, "failed to ioremap\n");
 		ret = -ENOMEM;
-		goto fail;
+		goto fail_free_wq;
 	}
 
 	priv->clk = clk_get(dev->dev, "fck");
 	if (IS_ERR(priv->clk)) {
 		dev_err(dev->dev, "failed to get functional clock\n");
 		ret = -ENODEV;
-		goto fail;
+		goto fail_iounmap;
 	}
 
 #ifdef CONFIG_CPU_FREQ
@@ -207,7 +214,7 @@ static int tilcdc_load(struct drm_device *dev, unsigned long flags)
 			CPUFREQ_TRANSITION_NOTIFIER);
 	if (ret) {
 		dev_err(dev->dev, "failed to register cpufreq notifier\n");
-		goto fail;
+		goto fail_put_clk;
 	}
 #endif
 
@@ -260,13 +267,13 @@ static int tilcdc_load(struct drm_device *dev, unsigned long flags)
 	ret = modeset_init(dev);
 	if (ret < 0) {
 		dev_err(dev->dev, "failed to initialize mode setting\n");
-		goto fail;
+		goto fail_cpufreq_unregister;
 	}
 
 	ret = drm_vblank_init(dev, 1);
 	if (ret < 0) {
 		dev_err(dev->dev, "failed to initialize vblank\n");
-		goto fail;
+		goto fail_mode_config_cleanup;
 	}
 
 	pm_runtime_get_sync(dev->dev);
@@ -274,7 +281,7 @@ static int tilcdc_load(struct drm_device *dev, unsigned long flags)
 	pm_runtime_put_sync(dev->dev);
 	if (ret < 0) {
 		dev_err(dev->dev, "failed to install IRQ handler\n");
-		goto fail;
+		goto fail_vblank_cleanup;
 	}
 
 	platform_set_drvdata(pdev, dev);
@@ -290,13 +297,46 @@ static int tilcdc_load(struct drm_device *dev, unsigned long flags)
 	priv->fbdev = drm_fbdev_cma_init(dev, bpp,
 			dev->mode_config.num_crtc,
 			dev->mode_config.num_connector);
+	if (IS_ERR(priv->fbdev)) {
+		ret = PTR_ERR(priv->fbdev);
+		goto fail_irq_uninstall;
+	}
 
 	drm_kms_helper_poll_init(dev);
 
 	return 0;
 
-fail:
-	tilcdc_unload(dev);
+fail_irq_uninstall:
+	pm_runtime_get_sync(dev->dev);
+	drm_irq_uninstall(dev);
+	pm_runtime_put_sync(dev->dev);
+
+fail_vblank_cleanup:
+	drm_vblank_cleanup(dev);
+
+fail_mode_config_cleanup:
+	drm_mode_config_cleanup(dev);
+
+fail_cpufreq_unregister:
+	pm_runtime_disable(dev->dev);
+#ifdef CONFIG_CPU_FREQ
+	cpufreq_unregister_notifier(&priv->freq_transition,
+			CPUFREQ_TRANSITION_NOTIFIER);
+#endif
+
+fail_put_clk:
+	clk_put(priv->clk);
+
+fail_iounmap:
+	iounmap(priv->mmio);
+
+fail_free_wq:
+	flush_workqueue(priv->wq);
+	destroy_workqueue(priv->wq);
+
+fail_free_priv:
+	dev->dev_private = NULL;
+	kfree(priv);
 	return ret;
 }
 
@@ -333,7 +373,11 @@ static int tilcdc_irq_postinstall(struct drm_device *dev)
 	if (priv->rev == 1)
 		tilcdc_set(dev, LCDC_RASTER_CTRL_REG, LCDC_V1_UNDERFLOW_INT_ENA);
 	else
-		tilcdc_set(dev, LCDC_INT_ENABLE_SET_REG, LCDC_V2_UNDERFLOW_INT_ENA);
+		tilcdc_set(dev, LCDC_INT_ENABLE_SET_REG,
+			   LCDC_V2_UNDERFLOW_INT_ENA |
+			   LCDC_V2_END_OF_FRAME0_INT_ENA |
+			   LCDC_V2_END_OF_FRAME1_INT_ENA |
+			   LCDC_FRAME_DONE);
 
 	return 0;
 }
@@ -353,38 +397,16 @@ static void tilcdc_irq_uninstall(struct drm_device *dev)
 			LCDC_V2_END_OF_FRAME0_INT_ENA | LCDC_V2_END_OF_FRAME1_INT_ENA |
 			LCDC_FRAME_DONE);
 	}
-
-}
-
-static void enable_vblank(struct drm_device *dev, bool enable)
-{
-	struct tilcdc_drm_private *priv = dev->dev_private;
-	u32 reg, mask;
-
-	if (priv->rev == 1) {
-		reg = LCDC_DMA_CTRL_REG;
-		mask = LCDC_V1_END_OF_FRAME_INT_ENA;
-	} else {
-		reg = LCDC_INT_ENABLE_SET_REG;
-		mask = LCDC_V2_END_OF_FRAME0_INT_ENA |
-			LCDC_V2_END_OF_FRAME1_INT_ENA | LCDC_FRAME_DONE;
-	}
-
-	if (enable)
-		tilcdc_set(dev, reg, mask);
-	else
-		tilcdc_clear(dev, reg, mask);
 }
 
 static int tilcdc_enable_vblank(struct drm_device *dev, int crtc)
 {
-	enable_vblank(dev, true);
 	return 0;
 }
 
 static void tilcdc_disable_vblank(struct drm_device *dev, int crtc)
 {
-	enable_vblank(dev, false);
+	return;
 }
 
 #if defined(CONFIG_DEBUG_FS) || defined(CONFIG_PM_SLEEP)
@@ -546,13 +568,23 @@ static int tilcdc_pm_suspend(struct device *dev)
 
 	drm_kms_helper_poll_disable(ddev);
 
+	/* Select sleep pin state */
+	pinctrl_pm_select_sleep_state(dev);
+
+	if (pm_runtime_suspended(dev)) {
+		priv->ctx_valid = false;
+		return 0;
+	}
+
+	/* Disable the LCDC controller, to avoid locking up the PRCM */
+	tilcdc_crtc_dpms(priv->crtc, DRM_MODE_DPMS_OFF);
+
 	/* Save register state: */
 	for (i = 0; i < ARRAY_SIZE(registers); i++)
 		if (registers[i].save && (priv->rev >= registers[i].rev))
 			priv->saved_register[n++] = tilcdc_read(ddev, registers[i].reg);
 
-	/* Select sleep pin state */
-	pinctrl_pm_select_sleep_state(dev);
+	priv->ctx_valid = true;
 
 	return 0;
 }
@@ -566,10 +598,14 @@ static int tilcdc_pm_resume(struct device *dev)
 	/* Select default pin state */
 	pinctrl_pm_select_default_state(dev);
 
-	/* Restore register state: */
-	for (i = 0; i < ARRAY_SIZE(registers); i++)
-		if (registers[i].save && (priv->rev >= registers[i].rev))
-			tilcdc_write(ddev, registers[i].reg, priv->saved_register[n++]);
+	if (priv->ctx_valid == true) {
+		/* Restore register state: */
+		for (i = 0; i < ARRAY_SIZE(registers); i++)
+			if (registers[i].save &&
+			    (priv->rev >= registers[i].rev))
+				tilcdc_write(ddev, registers[i].reg,
+					     priv->saved_register[n++]);
+	}
 
 	/*
 	 * if this call isn't here, the display is blank on return from
@@ -643,10 +679,10 @@ static int __init tilcdc_drm_init(void)
 static void __exit tilcdc_drm_fini(void)
 {
 	DBG("fini");
-	tilcdc_tfp410_fini();
-	tilcdc_slave_fini();
-	tilcdc_panel_fini();
 	platform_driver_unregister(&tilcdc_platform_driver);
+	tilcdc_panel_fini();
+	tilcdc_slave_fini();
+	tilcdc_tfp410_fini();
 }
 
 late_initcall(tilcdc_drm_init);
