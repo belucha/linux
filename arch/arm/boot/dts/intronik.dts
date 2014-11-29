@@ -89,19 +89,19 @@
 	status = "okay";
 };
 
-/* uart2: X1.15 (P9.22), X1.16 (P9.21) */
+/* uart2: X1.15 (P9.22), X1.16 (P9.21) 
 &uart2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart2_pins>;
 	status = "okay";
-};
+}; */
 
-/* uart4: X4.3 (P9.11), X4.1 (P9.13) */
+/* uart4: X4.3 (P9.11), X4.1 (P9.13) 
 &uart4 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart4_pins>;
 	status = "okay";
-};
+};*/
 
 /* can0: X2 */
 &dcan0 {
