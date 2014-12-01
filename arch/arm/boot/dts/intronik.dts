@@ -8,7 +8,7 @@
 
 #include "am33xx.dtsi"
 #include "am335x-bone-common.dtsi"
-#include "am335x-bone-common-pinmux.dtsi"
+#include "am335x-intronik-common-pinmux.dtsi"
 #include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/input/input.h>
 
@@ -55,7 +55,7 @@
 	};
 
 	beeper_pins: beeper_pins_s0 {
-		pinctrl-signgle,pins = <
+		pinctrl-single,pins = <
 			0x030 (PIN_OUTPUT | MUX_MODE7) /* P8.12: GPIO1[12] */
 		>;
 	};
