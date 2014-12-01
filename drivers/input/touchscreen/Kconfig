@@ -516,6 +516,21 @@ config TOUCHSCREEN_NH_FT5X06
 	  To compile this driver as a module, choose M here: the
 	  module will be called nh-ft5x06.
 
+config TOUCHSCREEN_AMP_ST1332
+	tristate "AMPIRE ST1332 BASED I2C Touchscreen support"
+	depends on I2C
+	help
+	  Say Y here if you have an New Haven touchscreen based
+	  on the ST1332 family of controllers connected to
+	  your system. The ST1332 is an programmable microcontroller,
+	  thus the driver is checked only with the AM-800480L1TMQW-TN0H
+	  display.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called amp-st1332.
+
 config TOUCHSCREEN_MIGOR
 	tristate "Renesas MIGO-R touchscreen"
 	depends on SH_MIGOR && I2C

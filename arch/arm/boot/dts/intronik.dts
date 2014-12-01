@@ -48,11 +48,6 @@
 		>;
 	};
 	
-	edt_ft5x06_pins: edt_ft5x06_pins_s0 {
-		pinctrl-single,pins = <
-			0x038 (PIN_INPUT_PULLUP | MUX_MODE7 )  /* P8.16: GPIO1[14] */
-		>;
-	};
 
 	beeper_pins: beeper_pins_s0 {
 		pinctrl-single,pins = <
@@ -182,6 +177,14 @@
 		interrupt-parent = <&gpio1>;
 		interrupts = <14 IRQ_TYPE_EDGE_FALLING>;
 	};	
+
+	touchAmpSt1332: amp-st1332@55 {
+		compatible = "ampire,st1332";
+		reg = <0x55>;
+		//touch-gpio = <&gpio1 14 GPIO_ACTIVE_LOW>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <14 IRQ_TYPE_EDGE_FALLING>;
+	};
 
 };
 
