@@ -79,13 +79,13 @@ static int nh_ft5x06_ts_identify(struct i2c_client *client)
 		return error;
 
 	// check, various firmware bytes
-	if (
+/*	if (
 		(nh_ft5x06_ts_check(client, buf, 0xA1-start_reg, 0x30, "ID_G_LIB_VERSION_H")!=0)||
 		(nh_ft5x06_ts_check(client, buf, 0xA2-start_reg, 0x01, "ID_G_LIB_VERSION_L")!=0)||
 		(nh_ft5x06_ts_check(client, buf, 0xA3-start_reg, 0x55, "ID_G_CIPHER")!=0)||
 		(nh_ft5x06_ts_check(client, buf, 0xA6-start_reg, 0x05, "ID_G_FIRMID")!=0))
 			return -1;
-
+*/
 	return 0;
 }
 
